@@ -1,121 +1,137 @@
-import express from 'express';
-import cors from 'cors';
-import pg from 'pg';
-import dotenv from 'dotenv';
-
-// IMPORTA O CRON DE ATUALIZAÇÃO
-import './updateAtivos.js';
-
-dotenv.config();
-
-const { Pool } = pg;
+import express from "express";
+import cors from "cors";
+import pg from "pg";
+import yahooFinance from "yahoo-finance2";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// ===============================
-// CONEXÃO COM POSTGRES / NEON
-// ===============================
+const { Pool } = pg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+  },
+});
+
+const ativos = [
+  "PETR4.SA",
+  "VALE3.SA",
+  "ITUB4.SA",
+  "BBAS3.SA",
+  "MXRF11.SA",
+  "HGLG11.SA",
+  "BOVA11.SA",
+];
+
+async function atualizarAtivos() {
+  console.log("Atualizando ativos...");
+
+  for (const ticker of ativos) {
+    try {
+      const ativo = await yahooFinance.quote(ticker);
+
+      const tickerLimpo = ticker.replace(".SA", "");
+
+      await pool.query(
+        `
+        INSERT INTO ativos
+        (
+          ticker,
+          nome,
+          preco,
+          variacao,
+          abertura,
+          maxima,
+          minima,
+          volume,
+          atualizacao
+        )
+
+        VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+
+        ON CONFLICT (ticker)
+
+        DO UPDATE SET
+          nome = EXCLUDED.nome,
+          preco = EXCLUDED.preco,
+          variacao = EXCLUDED.variacao,
+          abertura = EXCLUDED.abertura,
+          maxima = EXCLUDED.maxima,
+          minima = EXCLUDED.minima,
+          volume = EXCLUDED.volume,
+          atualizacao = NOW()
+        `,
+        [
+          tickerLimpo,
+          ativo.longName,
+          ativo.regularMarketPrice,
+          ativo.regularMarketChangePercent,
+          ativo.regularMarketOpen,
+          ativo.regularMarketDayHigh,
+          ativo.regularMarketDayLow,
+          ativo.regularMarketVolume,
+        ]
+      );
+
+      await pool.query(
+        `
+        INSERT INTO historico_ativos
+        (
+          ticker,
+          preco,
+          variacao,
+          volume
+        )
+
+        VALUES ($1,$2,$3,$4)
+        `,
+        [
+          tickerLimpo,
+          ativo.regularMarketPrice,
+          ativo.regularMarketChangePercent,
+          ativo.regularMarketVolume,
+        ]
+      );
+
+      console.log(`✅ ${ticker} atualizado`);
+    } catch (erro) {
+      console.log(`❌ Erro em ${ticker}`);
+      console.log(erro.message);
+    }
   }
-});
+}
 
-// ===============================
-// ROTA PRINCIPAL
-// ===============================
+setInterval(atualizarAtivos, 60000);
 
-app.get('/', (req, res) => {
-
+app.get("/", (req, res) => {
   res.json({
-    status: 'ONLINE',
-    mensagem: 'API Investimento Digital funcionando'
+    status: "online",
   });
-
 });
 
-// ===============================
-// LISTAR TODOS OS ATIVOS
-// ===============================
-
-app.get('/ativos', async (req, res) => {
-
+app.get("/ativos", async (req, res) => {
   try {
-
     const resultado = await pool.query(`
       SELECT *
       FROM ativos
-      ORDER BY ticker ASC
+      ORDER BY ticker
     `);
 
     res.json(resultado.rows);
-
-  } catch (error) {
-
-    console.error(error);
-
+  } catch (erro) {
     res.status(500).json({
-      erro: 'Erro ao buscar ativos'
+      erro: erro.message,
     });
-
   }
-
 });
 
-// ===============================
-// BUSCAR ATIVO ESPECÍFICO
-// ===============================
-
-app.get('/ativos/:ticker', async (req, res) => {
-
+app.get("/historico/:ticker", async (req, res) => {
   try {
-
-    const { ticker } = req.params;
-
-    const resultado = await pool.query(
-      `
-      SELECT *
-      FROM ativos
-      WHERE ticker = $1
-      `,
-      [ticker.toUpperCase()]
-    );
-
-    if (resultado.rows.length === 0) {
-
-      return res.status(404).json({
-        erro: 'Ativo não encontrado'
-      });
-
-    }
-
-    res.json(resultado.rows[0]);
-
-  } catch (error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      erro: 'Erro ao buscar ativo'
-    });
-
-  }
-
-});
-
-// ===============================
-// HISTÓRICO DO ATIVO
-// ===============================
-
-app.get('/historico/:ticker', async (req, res) => {
-
-  try {
-
     const { ticker } = req.params;
 
     const resultado = await pool.query(
@@ -123,40 +139,23 @@ app.get('/historico/:ticker', async (req, res) => {
       SELECT *
       FROM historico_ativos
       WHERE ticker = $1
-      ORDER BY data_registro DESC
-      LIMIT 100
+      ORDER BY data_coleta ASC
       `,
-      [ticker.toUpperCase()]
+      [ticker]
     );
 
     res.json(resultado.rows);
-
-  } catch (error) {
-
-    console.error(error);
-
+  } catch (erro) {
     res.status(500).json({
-      erro: 'Erro ao buscar histórico'
+      erro: erro.message,
     });
-
   }
-
 });
 
-// ===============================
-// PORTA DO RENDER
-// ===============================
+const PORT = process.env.PORT || 10000;
 
-const PORT = process.env.PORT || 3000;
+app.listen(PORT, async () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
 
-// ===============================
-// INICIAR SERVIDOR
-// ===============================
-
-app.listen(PORT, () => {
-
-  console.log('====================================');
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log('====================================');
-
+  await atualizarAtivos();
 });
