@@ -1,11 +1,12 @@
 import pg from "pg";
 import yahooFinance from "yahoo-finance2";
+import { ativos } from "./ativos.js";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const { Pool } = pg;
-const ativos = [...];
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
