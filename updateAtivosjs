@@ -1,4 +1,4 @@
-import YahooFinance from "yahoo-finance2";
+import { YahooFinance } from "yahoo-finance2";
 import pkg from "pg";
 import dotenv from "dotenv";
 import { ativos } from "./ativos.js";
