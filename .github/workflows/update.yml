@@ -2,12 +2,12 @@ name: Atualizar Ativos
 
 on:
   schedule:
-    - cron: "*/15 10-18 * * 1-5"
+    - cron: "*/15 13-21 * * 1-5"
 
   workflow_dispatch:
 
 jobs:
-  atualizar:
+  update:
     runs-on: ubuntu-latest
 
     steps:
@@ -17,12 +17,12 @@ jobs:
       - name: Instalar Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Instalar dependências
         run: npm install
 
       - name: Rodar atualização
-        run: node updateativos.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node updateAtivos.js
