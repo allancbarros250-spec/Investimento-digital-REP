@@ -1,62 +1,39 @@
 import yahooFinance from "yahoo-finance2";
 import pkg from "pg";
+import dotenv from "dotenv";
 import { ativos } from "./ativos.js";
 
-const { Pool } = pkg;
+dotenv.config();
 
-/*
-===========================================
-CONEXÃO POSTGRES / NEON
-===========================================
-*/
+const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+  },
 });
 
-/*
-===========================================
-FUNÇÃO PRINCIPAL
-===========================================
-*/
+console.log("====================================");
+console.log("Atualizando ativos...");
+console.log("====================================");
 
 async function atualizarAtivos() {
-
-  console.log("====================================");
-  console.log("Atualizando ativos...");
-  console.log("====================================");
-
   for (const ticker of ativos) {
-
     try {
-
       console.log(`Buscando ${ticker}...`);
-
-      /*
-      ===========================================
-      BUSCA DADOS DO YAHOO
-      ===========================================
-      */
 
       const ativo = await yahooFinance.quote(ticker);
 
-      /*
-      ===========================================
-      REMOVE .SA
-      ===========================================
-      */
+      if (!ativo || !ativo.regularMarketPrice) {
+        console.log(`❌ Dados inválidos para ${ticker}`);
+        continue;
+      }
 
+      // REMOVE O .SA PARA PADRONIZAR
       const tickerLimpo = ticker.replace(".SA", "");
 
-      /*
-      ===========================================
-      INSERE / ATUALIZA TABELA PRINCIPAL
-      ===========================================
-      */
-
+      // TABELA PRINCIPAL
       await pool.query(
         `
         INSERT INTO ativos
@@ -72,8 +49,7 @@ async function atualizarAtivos() {
           atualizacao
         )
 
-        VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
 
         ON CONFLICT (ticker)
 
@@ -95,16 +71,11 @@ async function atualizarAtivos() {
           ativo.regularMarketOpen || 0,
           ativo.regularMarketDayHigh || 0,
           ativo.regularMarketDayLow || 0,
-          ativo.regularMarketVolume || 0
+          ativo.regularMarketVolume || 0,
         ]
       );
 
-      /*
-      ===========================================
-      HISTÓRICO DOS ATIVOS
-      ===========================================
-      */
-
+      // HISTÓRICO
       await pool.query(
         `
         INSERT INTO historico_ativos
@@ -112,30 +83,24 @@ async function atualizarAtivos() {
           ticker,
           preco,
           variacao,
-          volume,
-          data_coleta
+          volume
         )
 
-        VALUES
-        ($1,$2,$3,$4,NOW())
+        VALUES ($1,$2,$3,$4)
         `,
         [
           tickerLimpo,
           ativo.regularMarketPrice || 0,
           ativo.regularMarketChangePercent || 0,
-          ativo.regularMarketVolume || 0
+          ativo.regularMarketVolume || 0,
         ]
       );
 
-      console.log(`✅ ${ticker} atualizado`);
-
+      console.log(`✅ ${tickerLimpo} atualizado`);
     } catch (erro) {
-
       console.log(`❌ Erro em ${ticker}`);
       console.log(erro.message);
-
     }
-
   }
 
   console.log("====================================");
@@ -143,13 +108,6 @@ async function atualizarAtivos() {
   console.log("====================================");
 
   await pool.end();
-
 }
-
-/*
-===========================================
-EXECUTA
-===========================================
-*/
 
 atualizarAtivos();
