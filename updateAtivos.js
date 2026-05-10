@@ -2,72 +2,61 @@ import yahooFinance from "yahoo-finance2";
 import pkg from "pg";
 import { ativos } from "./ativos.js";
 
-dotenv.config();
+const { Pool } = pkg;
 
-const { Pool } = pg;
+/*
+===========================================
+CONEXÃO POSTGRES / NEON
+===========================================
+*/
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
-  },
-});
-
-const yahoo = new yahooFinance.default({
-  suppressNotices: ["yahooSurvey"],
-});
-
-function mercadoAberto() {
-  const agora = new Date();
-
-  const diaSemana = agora.getDay();
-
-  // 0 = domingo
-  // 6 = sábado
-  if (diaSemana === 0 || diaSemana === 6) {
-    return false;
+    rejectUnauthorized: false
   }
+});
 
-  const horaBrasil = agora.toLocaleString("en-US", {
-    timeZone: "America/Sao_Paulo",
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  const [hora] = horaBrasil.split(":").map(Number);
-
-  return hora >= 10 && hora < 18;
-}
+/*
+===========================================
+FUNÇÃO PRINCIPAL
+===========================================
+*/
 
 async function atualizarAtivos() {
-  console.log("====================================");
-  console.log("Iniciando atualização...");
-  console.log("====================================");
 
-  if (!mercadoAberto()) {
-    console.log("Mercado fechado.");
-    process.exit(0);
-  }
-
-  let sucesso = 0;
-  let erros = 0;
+  console.log("====================================");
+  console.log("Atualizando ativos...");
+  console.log("====================================");
 
   for (const ticker of ativos) {
+
     try {
+
       console.log(`Buscando ${ticker}...`);
 
-      const ativo = await yahoo.quote(ticker);
+      /*
+      ===========================================
+      BUSCA DADOS DO YAHOO
+      ===========================================
+      */
 
-      if (!ativo || !ativo.regularMarketPrice) {
-        console.log(`❌ Dados inválidos em ${ticker}`);
-        erros++;
-        continue;
-      }
+      const ativo = await yahooFinance.quote(ticker);
+
+      /*
+      ===========================================
+      REMOVE .SA
+      ===========================================
+      */
 
       const tickerLimpo = ticker.replace(".SA", "");
 
-      // TABELA PRINCIPAL
+      /*
+      ===========================================
+      INSERE / ATUALIZA TABELA PRINCIPAL
+      ===========================================
+      */
+
       await pool.query(
         `
         INSERT INTO ativos
@@ -100,17 +89,22 @@ async function atualizarAtivos() {
         `,
         [
           tickerLimpo,
-          ativo.longName || tickerLimpo,
+          ativo.longName || ativo.shortName || tickerLimpo,
           ativo.regularMarketPrice || 0,
           ativo.regularMarketChangePercent || 0,
           ativo.regularMarketOpen || 0,
           ativo.regularMarketDayHigh || 0,
           ativo.regularMarketDayLow || 0,
-          ativo.regularMarketVolume || 0,
+          ativo.regularMarketVolume || 0
         ]
       );
 
-      // HISTÓRICO
+      /*
+      ===========================================
+      HISTÓRICO DOS ATIVOS
+      ===========================================
+      */
+
       await pool.query(
         `
         INSERT INTO historico_ativos
@@ -118,35 +112,44 @@ async function atualizarAtivos() {
           ticker,
           preco,
           variacao,
-          volume
+          volume,
+          data_coleta
         )
 
-        VALUES ($1,$2,$3,$4)
+        VALUES
+        ($1,$2,$3,$4,NOW())
         `,
         [
           tickerLimpo,
           ativo.regularMarketPrice || 0,
           ativo.regularMarketChangePercent || 0,
-          ativo.regularMarketVolume || 0,
+          ativo.regularMarketVolume || 0
         ]
       );
 
       console.log(`✅ ${ticker} atualizado`);
-      sucesso++;
+
     } catch (erro) {
+
       console.log(`❌ Erro em ${ticker}`);
       console.log(erro.message);
-      erros++;
+
     }
+
   }
 
   console.log("====================================");
-  console.log("Atualização concluída");
-  console.log(`✅ Sucesso: ${sucesso}`);
-  console.log(`❌ Erros: ${erros}`);
+  console.log("Atualização concluída!");
   console.log("====================================");
 
-  process.exit(0);
+  await pool.end();
+
 }
+
+/*
+===========================================
+EXECUTA
+===========================================
+*/
 
 atualizarAtivos();
