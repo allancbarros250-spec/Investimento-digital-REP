@@ -1,3 +1,4 @@
+// VERSAO NOVA TESTE 999
 import YahooFinance from "yahoo-finance2";
 import pkg from "pg";
 import dotenv from "dotenv";
