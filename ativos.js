@@ -3,6 +3,7 @@ export const ativos = [
   // AÇÕES IBOVESPA
   // =========================
   "PETR4.SA",
+  "PETR3.SA",
   "VALE3.SA",
   "ITUB4.SA",
   "BBAS3.SA",
