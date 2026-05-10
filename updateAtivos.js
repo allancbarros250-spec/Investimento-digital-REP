@@ -1,80 +1,173 @@
-import yahooFinanceModule from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
 import pkg from "pg";
 import dotenv from "dotenv";
 import { ativos } from "./ativos.js";
 
 dotenv.config();
 
-const YahooFinanceClass = yahooFinanceModule.YahooFinance || yahooFinanceModule.default?.YahooFinance || yahooFinanceModule;
-const yahooFinance = new YahooFinanceClass();
-
-const { Pool } = pkg;
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+// REMOVE O AVISO DO YAHOO
+const yahooFinance = new YahooFinance({
+  suppressNotices: ['yahooSurvey']
 });
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { Pool } = pkg;
+
+// CONEXÃO COM O NEON
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
+
+console.log("====================================");
+console.log("Atualizando ativos...");
+console.log("====================================");
 
 async function atualizarAtivos() {
-    console.log("=== INICIANDO ATUALIZAÇÃO ===");
 
-    for (const ticker of ativos) {
-        try {
-            await sleep(3000); 
+  for (const ticker of ativos) {
 
-            console.log(`Buscando ${ticker}...`);
-            
-            // NA V3: Passamos apenas o ticker primeiro. 
-            // As opções de validação e headers agora são tratadas de forma mais simples.
-            const ativo = await yahooFinance.quote(ticker);
+    try {
 
-            if (!ativo) {
-                console.log(`⚠️ Sem resposta para ${ticker}`);
-                continue;
-            }
+      console.log(`Buscando ${ticker}...`);
 
-            const preco = ativo.regularMarketPrice || ativo.previousClose || ativo.postMarketPrice;
-            
-            if (!preco) {
-                console.log(`⚠️ Preço não encontrado para ${ticker}`);
-                continue;
-            }
+      // BUSCA NO YAHOO
+      const ativo = await yahooFinance.quote(ticker);
 
-            const tickerLimpo = ticker.replace(".SA", "");
-            const nomeAtivo = ativo.longName || ativo.shortName || tickerLimpo;
+      // VERIFICA SE VEIO DADO
+      if (!ativo) {
 
-            await pool.query(
-                `INSERT INTO ativos (ticker, nome, preco, variacao, abertura, maxima, minima, volume, atualizacao)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-                 ON CONFLICT (ticker) DO UPDATE SET
-                 nome = EXCLUDED.nome, preco = EXCLUDED.preco, variacao = EXCLUDED.variacao,
-                 abertura = EXCLUDED.abertura, maxima = EXCLUDED.maxima, minima = EXCLUDED.minima,
-                 volume = EXCLUDED.volume, atualizacao = NOW()`,
-                [
-                    tickerLimpo, nomeAtivo, preco,
-                    ativo.regularMarketChangePercent || 0,
-                    ativo.regularMarketOpen || preco,
-                    ativo.regularMarketDayHigh || preco,
-                    ativo.regularMarketDayLow || preco,
-                    ativo.regularMarketVolume || 0,
-                ]
-            );
+        console.log(`❌ Sem dados para ${ticker}`);
+        continue;
 
-            await pool.query(
-                `INSERT INTO historico_ativos (ticker, preco, variacao, volume) VALUES ($1, $2, $3, $4)`,
-                [tickerLimpo, preco, ativo.regularMarketChangePercent || 0, ativo.regularMarketVolume || 0]
-            );
+      }
 
-            console.log(`✅ ${tickerLimpo}: R$ ${preco.toFixed(2)}`);
+      // REMOVE .SA
+      const tickerLimpo = ticker.replace(".SA", "");
 
-        } catch (erro) {
-            console.log(`❌ Erro em ${ticker}: ${erro.message}`);
-        }
+      // DADOS
+      const nome =
+        ativo.longName ||
+        ativo.shortName ||
+        tickerLimpo;
+
+      const preco =
+        ativo.regularMarketPrice ?? 0;
+
+      const variacao =
+        ativo.regularMarketChangePercent ?? 0;
+
+      const abertura =
+        ativo.regularMarketOpen ?? 0;
+
+      const maxima =
+        ativo.regularMarketDayHigh ?? 0;
+
+      const minima =
+        ativo.regularMarketDayLow ?? 0;
+
+      const volume =
+        ativo.regularMarketVolume ?? 0;
+
+      // =====================================
+      // INSERE / ATUALIZA TABELA PRINCIPAL
+      // =====================================
+
+      await pool.query(
+        `
+        INSERT INTO ativos
+        (
+          ticker,
+          nome,
+          preco,
+          variacao,
+          abertura,
+          maxima,
+          minima,
+          volume,
+          atualizacao
+        )
+
+        VALUES
+        (
+          $1,$2,$3,$4,$5,$6,$7,$8,NOW()
+        )
+
+        ON CONFLICT (ticker)
+
+        DO UPDATE SET
+          nome = EXCLUDED.nome,
+          preco = EXCLUDED.preco,
+          variacao = EXCLUDED.variacao,
+          abertura = EXCLUDED.abertura,
+          maxima = EXCLUDED.maxima,
+          minima = EXCLUDED.minima,
+          volume = EXCLUDED.volume,
+          atualizacao = NOW()
+        `,
+        [
+          tickerLimpo,
+          nome,
+          preco,
+          variacao,
+          abertura,
+          maxima,
+          minima,
+          volume,
+        ]
+      );
+
+      // =====================================
+      // HISTÓRICO
+      // =====================================
+
+      await pool.query(
+        `
+        INSERT INTO historico_ativos
+        (
+          ticker,
+          preco,
+          variacao,
+          volume
+        )
+
+        VALUES
+        (
+          $1,$2,$3,$4
+        )
+        `,
+        [
+          tickerLimpo,
+          preco,
+          variacao,
+          volume,
+        ]
+      );
+
+      console.log(`✅ ${tickerLimpo} atualizado`);
+      console.log(`Preço: R$ ${preco}`);
+
+    } catch (erro) {
+
+      console.log(`❌ Erro em ${ticker}`);
+
+      // MOSTRA O ERRO REAL
+      console.log(erro);
+
     }
 
-    console.log("=== FINALIZADO COM SUCESSO ===");
-    await pool.end();
+    // EVITA RATE LIMIT
+    await new Promise(resolve =>
+      setTimeout(resolve, 1000)
+    );
+  }
+
+  console.log("====================================");
+  console.log("Atualização concluída!");
+  console.log("====================================");
+
+  await pool.end();
 }
 
 atualizarAtivos();
