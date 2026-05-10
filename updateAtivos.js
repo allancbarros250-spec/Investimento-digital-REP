@@ -5,7 +5,6 @@ import { ativos } from "./ativos.js";
 
 dotenv.config();
 
-// REMOVE O AVISO DO YAHOO
 const yahooFinance = new YahooFinance({
   suppressNotices: ['yahooSurvey']
 });
