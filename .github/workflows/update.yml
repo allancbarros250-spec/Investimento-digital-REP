@@ -26,3 +26,4 @@ jobs:
         run: node updateativos.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          
