@@ -23,7 +23,7 @@ jobs:
         run: npm install
 
       - name: Rodar atualização
-        run: node updateativos.js
+        run: node updateAtivos.js
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           
