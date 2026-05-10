@@ -1,7 +1,6 @@
-import pg from "pg";
 import yahooFinance from "yahoo-finance2";
+import pkg from "pg";
 import { ativos } from "./ativos.js";
-import dotenv from "dotenv";
 
 dotenv.config();
 
