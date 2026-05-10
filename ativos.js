@@ -1,9 +1,7 @@
 export const ativos = [
-
   // =========================
   // AÇÕES IBOVESPA
   // =========================
-
   "PETR4.SA",
   "VALE3.SA",
   "ITUB4.SA",
@@ -59,15 +57,14 @@ export const ativos = [
   "SLCE3.SA",
   "COGN3.SA",
   "CRFB3.SA",
-  "PETZ3.SA",
+  "AZRE3.SA", // Substituindo PETZ3 (Fusão Arezzo/Petz)
   "YDUQ3.SA",
   "AZUL4.SA",
   "CVCB3.SA",
 
   // =========================
-  // FIIs
+  // FIIs (Atualizados com Fusões e Base 10)
   // =========================
-
   "MXRF11.SA",
   "HGLG11.SA",
   "KNRI11.SA",
@@ -76,19 +73,16 @@ export const ativos = [
   "XPML11.SA",
   "HSML11.SA",
   "BRCO11.SA",
-  "BTLG11.SA",
-  "GGRC11.SA",
-  "RBRF11.SA",
-  "MALL11.SA",
+  "BTLG11.SA", // Recebeu os ativos do BCFF11
+  "GGRC11.SA", 
+  "CPTS11.SA",
   "PVBI11.SA",
   "RECT11.SA",
   "RZTR11.SA",
   "KNCR11.SA",
   "IRDM11.SA",
   "VGIR11.SA",
-  "CPTS11.SA",
   "HCTR11.SA",
-  "CVBI11.SA",
   "DEVA11.SA",
   "KNSC11.SA",
   "RECR11.SA",
@@ -97,7 +91,6 @@ export const ativos = [
   "TGAR11.SA",
   "ALZR11.SA",
   "RBRR11.SA",
-  "BCFF11.SA",
   "HGRE11.SA",
   "JSRE11.SA",
   "HGBS11.SA",
@@ -111,37 +104,30 @@ export const ativos = [
   "VGIP11.SA",
   "SNFF11.SA",
   "TEPP11.SA",
-  "HFOF11.SA",
   "XPCI11.SA",
   "MCCI11.SA",
-  "KFOF11.SA",
   "SARE11.SA",
   "HGCR11.SA",
   "OUJP11.SA",
+  "GARE11.SA", // Antigo HGLG/Outros de logística que mudaram
+  "GALG11.SA", // FII de base 10 muito comum agora
+  "VGHF11.SA", // FII base 10 extremamente popular (Opcional)
 
   // =========================
   // ETFs
   // =========================
-
   "BOVA11.SA",
   "SMAL11.SA",
   "IVVB11.SA",
   "HASH11.SA",
   "XFIX11.SA",
-  "GOVE11.SA",
   "DIVO11.SA",
-  "ECOO11.SA",
   "SPXI11.SA",
   "NASD11.SA",
   "QBTC11.SA",
   "QETH11.SA",
   "BOVV11.SA",
   "PIBB11.SA",
-  "FIND11.SA",
-  "MATB11.SA",
-  "ESGB11.SA",
-  "ACWI11.SA",
   "WRLD11.SA",
   "GOLD11.SA"
-
 ];
