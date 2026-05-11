@@ -1,27 +1,25 @@
 import YahooFinance from "yahoo-finance2";
-import pkg from "pg";
+import pg from "pg";
 import dotenv from "dotenv";
 import { ativos } from "./ativos.js";
 
 dotenv.config();
 
 // =====================================
-// YAHOO
+// YAHOO FINANCE
 // =====================================
 
-const yahooFinance = new YahooFinance({
-  suppressNotices: ["yahooSurvey"],
-  timeout: 15000,
-});
+const yahooFinance = new YahooFinance();
 
 // =====================================
 // POSTGRES / NEON
 // =====================================
 
-const { Pool } = pkg;
+const { Pool } = pg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+
   ssl: {
     rejectUnauthorized: false,
   },
@@ -30,6 +28,16 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 15000,
 });
+
+// =====================================
+// DELAY
+// =====================================
+
+function delay(ms) {
+  return new Promise(resolve =>
+    setTimeout(resolve, ms)
+  );
+}
 
 // =====================================
 // MERCADO ABERTO
@@ -54,30 +62,24 @@ function mercadoAberto() {
 }
 
 // =====================================
-// DELAY
+// BUSCA SEGURA
 // =====================================
 
-function delay(ms) {
-  return new Promise(resolve =>
-    setTimeout(resolve, ms)
-  );
-}
-
-// =====================================
-// BUSCAR COM SEGURANÇA
-// =====================================
-
-async function buscarAtivoSeguro(ticker) {
+async function buscarAtivo(ticker) {
 
   try {
 
-    const ativo = await yahooFinance.quote(ticker);
+    const resultado =
+      await yahooFinance.quote(ticker);
 
-    return ativo;
+    return resultado;
 
   } catch (erro) {
 
-    console.log(`❌ Falha Yahoo: ${ticker}`);
+    console.log(
+      `❌ Falha ao buscar ${ticker}`
+    );
+
     console.log(erro.message);
 
     return null;
@@ -85,13 +87,13 @@ async function buscarAtivoSeguro(ticker) {
 }
 
 // =====================================
-// ATUALIZAR
+// ATUALIZAÇÃO
 // =====================================
 
 async function atualizarAtivos() {
 
   console.log("====================================");
-  console.log("Atualizando ativos...");
+  console.log("🚀 Atualizando ativos...");
   console.log(
     new Date().toLocaleString("pt-BR")
   );
@@ -102,24 +104,29 @@ async function atualizarAtivos() {
 
   if (!salvarHistorico) {
 
-    console.log("⚠ Mercado fechado");
     console.log(
-      "Atualizando apenas tabela principal"
+      "⚠ Mercado fechado"
+    );
+
+    console.log(
+      "Somente tabela principal será atualizada"
     );
   }
 
-  for (const ticker of ativos) {
+  for (const tickerCompleto of ativos) {
 
     try {
 
-      console.log(`🔎 Buscando ${ticker}`);
+      console.log(
+        `🔎 Buscando ${tickerCompleto}`
+      );
 
       // =====================================
-      // YAHOO
+      // BUSCA
       // =====================================
 
       const ativo =
-        await buscarAtivoSeguro(ticker);
+        await buscarAtivo(tickerCompleto);
 
       if (!ativo) {
         continue;
@@ -129,13 +136,13 @@ async function atualizarAtivos() {
       // DADOS
       // =====================================
 
-      const tickerLimpo =
-        ticker.replace(".SA", "");
+      const ticker =
+        tickerCompleto.replace(".SA", "");
 
       const nome =
         ativo.longName ||
         ativo.shortName ||
-        tickerLimpo;
+        ticker;
 
       const preco = Number(
         ativo.regularMarketPrice ?? 0
@@ -162,13 +169,13 @@ async function atualizarAtivos() {
       );
 
       // =====================================
-      // IGNORA PREÇO INVÁLIDO
+      // VALIDAÇÃO
       // =====================================
 
       if (preco <= 0) {
 
         console.log(
-          `⚠ Preço inválido: ${ticker}`
+          `⚠ Preço inválido para ${ticker}`
         );
 
         continue;
@@ -201,17 +208,25 @@ async function atualizarAtivos() {
         ON CONFLICT (ticker)
 
         DO UPDATE SET
+
           nome = EXCLUDED.nome,
+
           preco = EXCLUDED.preco,
+
           variacao = EXCLUDED.variacao,
+
           abertura = EXCLUDED.abertura,
+
           maxima = EXCLUDED.maxima,
+
           minima = EXCLUDED.minima,
+
           volume = EXCLUDED.volume,
+
           atualizacao = NOW()
         `,
         [
-          tickerLimpo,
+          ticker,
           nome,
           preco,
           variacao,
@@ -244,7 +259,7 @@ async function atualizarAtivos() {
           )
           `,
           [
-            tickerLimpo,
+            ticker,
             preco,
             variacao,
             volume,
@@ -253,17 +268,17 @@ async function atualizarAtivos() {
       }
 
       console.log(
-        `✅ ${tickerLimpo} atualizado`
+        `✅ ${ticker} atualizado`
       );
 
       console.log(
-        `💰 R$ ${preco}`
+        `💰 Preço: R$ ${preco}`
       );
 
     } catch (erro) {
 
       console.log(
-        `❌ Erro geral em ${ticker}`
+        `❌ Erro geral em ${tickerCompleto}`
       );
 
       console.log(erro.message);
@@ -273,7 +288,7 @@ async function atualizarAtivos() {
     // ANTI RATE LIMIT
     // =====================================
 
-    await delay(2500);
+    await delay(3000);
   }
 
   console.log("====================================");
@@ -282,16 +297,18 @@ async function atualizarAtivos() {
 }
 
 // =====================================
-// EXECUÇÃO
+// EXECUÇÃO CONTÍNUA
 // =====================================
 
 async function iniciar() {
 
   try {
 
+    // Primeira execução
+
     await atualizarAtivos();
 
-    // Atualiza a cada 5 minutos
+    // Executa a cada 5 minutos
 
     setInterval(async () => {
 
